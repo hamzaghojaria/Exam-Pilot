@@ -1,0 +1,29 @@
+body {
+    font-family: Arial;
+    margin: 20px;
+}
+
+textarea {
+    width: 100%;
+    padding: 10px;
+}
+
+.question {
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.result {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+input[type="radio"]:checked+label {
+    font-weight: bold;
+}
+
+#result-section {
+    margin-top: 2rem;
+}
