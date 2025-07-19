@@ -1,48 +1,68 @@
 let quizId = "";
 let currentQuestions = [];
+let quizSubject = "";
+let quizDifficulty = "";
 
 async function generateQuiz() {
-    const content = document.getElementById("content").value.trim();
-    let questionCount = parseInt(document.getElementById("question-count").value || "2");
-    if (questionCount > 20) {
-        alert("Maximum 20 questions allowed.");
-        questionCount = 20;
-    }
+    const btn = document.getElementById("generate-btn");
+    btn.disabled = true;
+    btn.innerText = "⏳ Generating...";
 
+    const content = document.getElementById("content").value.trim();
+    const questionCount = Math.min(parseInt(document.getElementById("question-count").value || "2"), 20);
+    const difficulty = document.getElementById("difficulty").value;
+    const subject = document.getElementById("subject").value.trim();
+
+    quizSubject = subject;
+    quizDifficulty = difficulty;
 
     if (!content) {
         alert("Please paste some content first.");
+        btn.disabled = false;
+        btn.innerText = "🚀 Generate Test";
         return;
     }
 
+    // ✅ Clear previous result section
+    document.getElementById("result-section").innerHTML = "";
+
     document.getElementById("quiz-section").innerHTML = `
-    <div class="text-center text-gray-600 animate-pulse">Generating quiz...</div>`;
+      <div class="text-center text-gray-600 animate-pulse">Generating Test...</div>`;
 
     try {
         const res = await fetch("/generate-questions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content, count: questionCount })
+            body: JSON.stringify({ content, count: questionCount, difficulty, subject })
         });
 
         const data = await res.json();
         if (data.questions && data.questions.length > 0) {
             quizId = data.quiz_id;
             currentQuestions = data.questions;
-            console.log("📦 Received questions:", currentQuestions.length, currentQuestions);
             renderQuiz(currentQuestions);
-        }
-        else {
+        } else {
             document.getElementById("quiz-section").innerHTML = `<p class="text-red-500">Failed to generate quiz.</p>`;
         }
     } catch (error) {
         console.error(error);
         document.getElementById("quiz-section").innerHTML = `<p class="text-red-500">Server error.</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 Generate Test";
     }
 }
 
 function renderQuiz(questions) {
-    let html = "";
+    let metadataHTML = `
+      <div class="text-center text-sm text-gray-700 mb-4">
+        📘 <span class="font-medium">Subject:</span> ${quizSubject || "N/A"} &nbsp; | &nbsp;
+        🎯 <span class="font-medium">Difficulty:</span> ${quizDifficulty || "N/A"}
+      </div>
+    `;
+
+    let html = metadataHTML;
+
     questions.forEach((q, idx) => {
         html += `
       <div class="bg-white p-6 rounded-xl shadow-md border relative flex justify-between items-start gap-4">
@@ -50,12 +70,12 @@ function renderQuiz(questions) {
           <p class="text-lg font-semibold mb-2">Q${idx + 1}. ${q.question}</p>
           <div class="space-y-2">`;
 
-        q.options.forEach(opt => {
-            const val = opt.trim().charAt(0).toUpperCase();
+        q.options.forEach((opt, i) => {
+            const label = String.fromCharCode(65 + i); // A, B, C, D
             html += `
             <div class="flex items-center space-x-2">
-              <input type="radio" name="q${idx}" id="q${idx}_${val}" value="${val}" class="accent-indigo-600">
-              <label for="q${idx}_${val}" class="cursor-pointer">${opt}</label>
+              <input type="radio" name="q${idx}" id="q${idx}_${label}" value="${label}" class="accent-indigo-600">
+              <label for="q${idx}_${label}" class="cursor-pointer">${label}. ${opt}</label>
             </div>`;
         });
 
@@ -72,7 +92,7 @@ function renderQuiz(questions) {
     <div class="text-center">
       <button onclick="submitQuiz()"
         class="mt-6 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300">
-        ✅ Submit Quiz
+        ✅ Submit Test
       </button>
     </div>`;
 
@@ -111,8 +131,8 @@ function showResults(results) {
         const container = document.getElementById(`result-${idx}`);
         if (container) {
             container.innerHTML = `
-              <p class="text-sm">Your Score: <b>${res.your_answer || "—"}</b></p>
-              <p class="text-sm">Correct Ans: <b>${res.correct_answer}</b></p>
+              <p class="text-sm">Your Answer: <b>${res.your_answer || "—"}</b></p>
+              <p class="text-sm">Correct Answer: <b>${res.correct_answer}</b></p>
               <p class="${res.is_correct ? 'text-green-600' : 'text-red-500'} font-bold">
                 ${res.is_correct ? '✅ Correct' : '❌ Wrong'}
               </p>`;
@@ -127,7 +147,7 @@ function showResults(results) {
         <p class="text-3xl font-extrabold mt-2">${correctCount} / ${total}</p>
         <button onclick="retakeQuiz()"
           class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
-          🔁 Retake Quiz
+          🔁 Retake Test
         </button>
       </div>
     `;
