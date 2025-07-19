@@ -70,23 +70,24 @@ import ast
 async def generate_questions(request: Request):
     data = await request.json()
     content = data.get("content", "")
-    total_required = int(data.get("count", 2))  # Passed from frontend
+    total_required = int(data.get("count", 2))
+    difficulty = data.get("difficulty", "Medium")
+    subject = data.get("subject", "General Knowledge")
     total_required = min(total_required, 20)
-
     try:
         prompt = (
-            f"Generate {total_required} multiple-choice questions from the following content.\n"
-            "Each question must be in strict JSON format like:\n"
-            "{\n"
-            "  \"question\": \"...\",\n"
-            "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
-            "  \"answer\": \"A\"  // Just the correct letter\n"
-            "}\n\n"
-            "Wrap all questions in a single JSON array like this:\n"
-            "[ {...}, {...} ]\n"
-            "⚠️ Important: Do NOT add explanations or any extra text — only return raw JSON array.\n\n"
-            f"Content:\n{content}"
-        )
+        f"Generate {total_required} multiple-choice questions on the subject '{subject}' "
+        f"with a {difficulty.lower()} difficulty level, from the following content.\n"
+        "Each question must be in strict JSON format like:\n"
+        "{\n"
+        "  \"question\": \"...\",\n"
+        "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
+        "  \"answer\": \"A\"\n"
+        "}\n\n"
+        "Wrap all questions in a single JSON array.\n"
+        "⚠️ Important: Do NOT add explanations or extra text — only return raw JSON array.\n\n"
+        f"Content:\n{content}"
+    )
 
         print(f"🧠 Calling Ollama for {total_required} questions...")
         response = await generate_with_ollama(prompt)
