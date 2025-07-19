@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 import re
 import asyncio
-import ollama  
+import ollama
 import uvicorn
 from pydantic import BaseModel, field_validator
 import json
@@ -40,6 +40,7 @@ class QuizQuestion(BaseModel):
     question: str
     options: List[str]
     answer: str
+    explanation: str = ""
 
     @field_validator("options")
     @classmethod
@@ -74,20 +75,22 @@ async def generate_questions(request: Request):
     difficulty = data.get("difficulty", "Medium")
     subject = data.get("subject", "General Knowledge")
     total_required = min(total_required, 20)
+
     try:
         prompt = (
-        f"Generate {total_required} multiple-choice questions on the subject '{subject}' "
-        f"with a {difficulty.lower()} difficulty level, from the following content.\n"
-        "Each question must be in strict JSON format like:\n"
-        "{\n"
-        "  \"question\": \"...\",\n"
-        "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
-        "  \"answer\": \"A\"\n"
-        "}\n\n"
-        "Wrap all questions in a single JSON array.\n"
-        "⚠️ Important: Do NOT add explanations or extra text — only return raw JSON array.\n\n"
-        f"Content:\n{content}"
-    )
+            f"Generate {total_required} multiple-choice questions on the subject '{subject}' "
+            f"with a {difficulty.lower()} difficulty level, from the following content.\n\n"
+            "Each question must follow this strict JSON format:\n"
+            "{\n"
+            "  \"question\": \"...\",\n"
+            "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
+            "  \"answer\": \"A\",\n"
+            "  \"explanation\": \"Why this is the correct answer.\"\n"
+            "}\n\n"
+            "All questions must be returned as a single JSON array.\n"
+            "⚠️ Important: Do NOT add explanations or text outside the JSON array.\n\n"
+            f"Content:\n{content}"
+        )
 
         print(f"🧠 Calling Ollama for {total_required} questions...")
         response = await generate_with_ollama(prompt)
@@ -95,7 +98,6 @@ async def generate_questions(request: Request):
         print("=== OLLAMA RAW OUTPUT ===")
         print(repr(raw_output))
 
-        # Try parsing as JSON array directly
         try:
             questions_data = json.loads(raw_output)
             if not isinstance(questions_data, list):
@@ -134,15 +136,18 @@ async def generate_questions(request: Request):
 
         return JSONResponse(content={
             "quiz_id": quiz_id,
-            "questions": [{k: v for k, v in q.items() if k != "answer"} for q in all_questions[:total_required]]
+            "questions": [
+                {
+                    k: v for k, v in q.items()
+                    if k != "answer"  # Don't reveal answer yet
+                } for q in all_questions[:total_required]
+            ]
         })
 
     except Exception as e:
         print(f"❌ Error generating quiz: {e}")
         return JSONResponse(status_code=500, content={"error": "Failed to generate quiz."})
 
-
-# Check answers endpoint
 @app.post("/check-answers")
 async def check_answers(request: Request):
     data = await request.json()
@@ -162,11 +167,11 @@ async def check_answers(request: Request):
             "question": q["question"],
             "your_answer": user_ans,
             "correct_answer": correct,
-            "is_correct": user_ans == correct
+            "is_correct": user_ans == correct,
+            "explanation": q.get("explanation", "")
         })
 
     return JSONResponse(content={"result": result})
 
-# Run the app
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
