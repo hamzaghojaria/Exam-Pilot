@@ -10,6 +10,7 @@ import uvicorn
 from pydantic import BaseModel, field_validator
 import json
 from typing import List
+import ast
 
 app = FastAPI()
 
@@ -65,7 +66,7 @@ async def generate_with_ollama(prompt: str):
         options={"num_predict": 1024}
     ))
 
-import ast
+
 
 @app.post("/generate-questions")
 async def generate_questions(request: Request):
@@ -76,77 +77,71 @@ async def generate_questions(request: Request):
     subject = data.get("subject", "General Knowledge")
     total_required = min(total_required, 20)
 
-    try:
-        prompt = (
-            f"Generate {total_required} multiple-choice questions on the subject '{subject}' "
-            f"with a {difficulty.lower()} difficulty level, from the following content.\n\n"
-            "Each question must follow this strict JSON format:\n"
-            "{\n"
-            "  \"question\": \"...\",\n"
-            "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
-            "  \"answer\": \"A\",\n"
-            "  \"explanation\": \"Why this is the correct answer.\"\n"
-            "}\n\n"
-            "All questions must be returned as a single JSON array.\n"
-            "⚠️ Important: Do NOT add explanations or text outside the JSON array.\n\n"
-            f"Content:\n{content}"
-        )
+    prompt = (
+        f"Generate {total_required} multiple-choice questions on the subject '{subject}' "
+        f"with a {difficulty.lower()} difficulty level, from the following content.\n\n"
+        "Each question must follow this strict JSON format:\n"
+        "{\n"
+        "  \"question\": \"...\",\n"
+        "  \"options\": [\"A. ...\", \"B. ...\", \"C. ...\", \"D. ...\"],\n"
+        "  \"answer\": \"A\",\n"
+        "  \"explanation\": \"Why this is the correct answer.\"\n"
+        "}\n\n"
+        "All questions must be returned as a single JSON array.\n"
+        "⚠️ Important: Do NOT add explanations or text outside the JSON array.\n\n"
+        f"Content:\n{content}"
+    )
 
-        print(f"🧠 Calling Ollama for {total_required} questions...")
-        response = await generate_with_ollama(prompt)
-        raw_output = response["response"].strip()
-        print("=== OLLAMA RAW OUTPUT ===")
-        print(repr(raw_output))
-
+    for attempt in range(3):
         try:
-            questions_data = json.loads(raw_output)
-            if not isinstance(questions_data, list):
-                raise ValueError("Expected a list.")
-        except Exception:
-            print("⚠️ Parsing failed. Trying to recover individual JSON objects...")
-            questions_data = []
-            matches = re.findall(r'{[^{}]*}', raw_output)
-            for m in matches:
-                try:
-                    m_fixed = m.strip()
-                    if not m_fixed.endswith("}"):
-                        m_fixed += "}"
+            print(f"🧠 Attempt {attempt+1} to generate {total_required} questions ...")
+            response = await generate_with_ollama(prompt)
+            raw_output = response["response"].strip()
 
-                    obj = ast.literal_eval(m_fixed.replace("true", "True").replace("false", "False"))
-                    if isinstance(obj, dict):
-                        questions_data.append(obj)
-                except Exception as e:
-                    print("⛔ Skipping invalid JSON object:", e)
+            # Try parsing
+            try:
+                questions_data = json.loads(raw_output)
+                if not isinstance(questions_data, list):
+                    raise ValueError("Expected a list.")
+            except Exception:
+                questions_data = []
+                matches = re.findall(r'{[^{}]*}', raw_output)
+                for m in matches:
+                    try:
+                        m_fixed = m.strip()
+                        if not m_fixed.endswith("}"):
+                            m_fixed += "}"
+                        obj = ast.literal_eval(m_fixed.replace("true", "True").replace("false", "False"))
+                        if isinstance(obj, dict):
+                            questions_data.append(obj)
+                    except:
+                        continue
+
+            all_questions = []
+            for q in questions_data:
+                try:
+                    if "options" in q and isinstance(q["options"], list):
+                        q["options"] = q["options"][:4]
+                    valid_q = QuizQuestion(**q).dict()
+                    all_questions.append(valid_q)
+                except:
                     continue
 
-        all_questions = []
-        for q in questions_data:
-            try:
-                if "options" in q and isinstance(q["options"], list):
-                    q["options"] = q["options"][:4]
-                valid_q = QuizQuestion(**q).dict()
-                all_questions.append(valid_q)
-            except Exception as e:
-                print(f"❌ Skipped invalid question: {e}")
-                print(f"   Data: {q}")
+            if all_questions:
+                quiz_id = str(uuid4())
+                quiz_store[quiz_id] = all_questions[:total_required]
+                return JSONResponse(content={
+                    "quiz_id": quiz_id,
+                    "questions": [
+                        {k: v for k, v in q.items() if k != "answer"}
+                        for q in all_questions[:total_required]
+                    ]
+                })
+        except Exception as e:
+            print(f"Attempt {attempt+1} failed: {e}")
 
-        quiz_id = str(uuid4())
-        quiz_store[quiz_id] = all_questions[:total_required]
-        print(f"✅ Final questions: {len(all_questions)}")
+    return JSONResponse(status_code=500, content={"error": "Failed to generate quiz after 3 retries."})
 
-        return JSONResponse(content={
-            "quiz_id": quiz_id,
-            "questions": [
-                {
-                    k: v for k, v in q.items()
-                    if k != "answer"  # Don't reveal answer yet
-                } for q in all_questions[:total_required]
-            ]
-        })
-
-    except Exception as e:
-        print(f"❌ Error generating quiz: {e}")
-        return JSONResponse(status_code=500, content={"error": "Failed to generate quiz."})
 
 @app.post("/check-answers")
 async def check_answers(request: Request):
