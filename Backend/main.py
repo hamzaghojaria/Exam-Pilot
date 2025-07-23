@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi import FastAPI, Request, Form, Response, HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse,RedirectResponse
+import bcrypt
+import uuid
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
@@ -10,7 +12,7 @@ import uvicorn
 from pydantic import BaseModel, field_validator
 import json
 from typing import List
-import ast
+import ast, os 
 
 app = FastAPI()
 
@@ -22,13 +24,157 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
+##################### Services ##################### - START
 # Serve static frontend files
 app.mount("/static", StaticFiles(directory="Frontend"), name="static")
 
+# In-memory user database
+user_db = {}         # email → {name, email, hashed_pw}
+sessions = {}        # session_id → email
+
 @app.get("/", response_class=HTMLResponse)
-async def serve_frontend():
+async def serve_frontend(request: Request):
+    session_id = request.cookies.get("session_id")
+    email = sessions.get(session_id)
     with open("Frontend/index.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    html = html.replace("{{logged_in}}", "true" if email else "false")
+    return HTMLResponse(content=html)
+
+
+@app.get("/signup", response_class=HTMLResponse)
+async def signup():
+    with open("Frontend/signup.html", "r", encoding="utf-8") as f:
         return f.read()
+
+@app.get("/login", response_class=HTMLResponse)
+async def login():
+    with open("Frontend/login.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/profile", response_class=HTMLResponse)
+async def profile(request: Request):
+    session_id = request.cookies.get("session_id")
+    if not session_id or session_id not in sessions:
+        return RedirectResponse("/login", status_code=302)
+
+    email = sessions[session_id]
+    user = user_db.get(email)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    with open("Frontend/profile.html", "r", encoding="utf-8") as f:
+        html = f.read()
+
+    # Replace placeholders with user data
+    html = html.replace("{{name}}", user.get("name", ""))
+    html = html.replace("{{email}}", user.get("email", ""))
+    html = html.replace("{{college}}", user.get("college", ""))
+    html = html.replace("{{standard}}", user.get("standard", ""))
+    html = html.replace("{{phone}}", user.get("phone", ""))
+
+    return HTMLResponse(content=html)
+
+@app.post("/update_profile")
+async def update_profile(
+    request: Request,
+    name: str = Form(...),
+    college: str = Form(""),
+    standard: str = Form(""),
+    phone: str = Form("")
+):
+    session_id = request.cookies.get("session_id")
+    email = sessions.get(session_id)
+
+    if not email or email not in user_db:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    # Update user info
+    user = user_db[email]
+    user["name"] = name
+    user["college"] = college
+    user["standard"] = standard
+    user["phone"] = phone
+
+    print( f"Updated profile for {user}")
+    # Redirect to profile with success flag
+    return RedirectResponse(url="/profile?updated=1", status_code=302)
+
+
+@app.get("/logout")
+async def logout(response: Response, request: Request):
+    session_id = request.cookies.get("session_id")
+    if session_id in sessions:
+        del sessions[session_id]
+    response = RedirectResponse("/login", status_code=302)
+    response.delete_cookie("session_id")
+    return response
+
+@app.post("/register")
+async def register(
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    college: str = Form(""),
+    standard: str = Form(""),
+    phone: str = Form("")
+):
+    if email in user_db:
+        return JSONResponse(status_code=400, content={"error": "User already exists!"})
+    
+    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+    user_db[email] = {
+        "name": name,
+        "email": email,
+        "password": hashed_pw,
+        "college": college,
+        "standard": standard,
+        "phone": phone
+    }
+    return {"message": "Registration successful."}
+
+
+
+@app.post("/login")
+async def do_login(
+    response: Response,
+    email: str = Form(...),
+    password: str = Form(...)
+):
+    user = user_db.get(email)
+    if not user or not bcrypt.checkpw(password.encode(), user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = email
+    response = RedirectResponse("/", status_code=302)
+    response.set_cookie("session_id", session_id, httponly=True)
+    return response
+
+@app.get("/users")
+async def get_users():
+    # Return full profile info except password
+    return [
+        {
+            "name": user["name"],
+            "email": user["email"],
+            "college": user.get("college", ""),
+            "standard": user.get("standard", ""),
+            "phone": user.get("phone", "")
+        }
+        for user in user_db.values()
+    ]
+@app.get("/sessions")
+async def get_sessions():
+    return [
+        {"session_id": sid, "email": email}
+        for sid, email in sessions.items()
+    ]
+
+
+##################### Services ##################### - END
 
 # In-memory quiz store
 quiz_store = {}
@@ -94,7 +240,7 @@ async def generate_questions(request: Request):
 
     for attempt in range(3):
         try:
-            print(f"🧠 Attempt {attempt+1} to generate {total_required} questions ...")
+            print(f"Attempt {attempt+1} to generate {total_required} questions ...")
             response = await generate_with_ollama(prompt)
             raw_output = response["response"].strip()
 
