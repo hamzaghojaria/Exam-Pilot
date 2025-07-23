@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>User Profile | Exam-Pilot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#4f46e5',
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-indigo-50 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <nav class="bg-white shadow-md mb-6">
+    <div class="max-w-3xl mx-auto flex justify-between items-center p-4">
+      <a href="/" class="text-xl font-bold text-brand">✈️ Exam-Pilot</a>
+      <div class="space-x-4">
+        <a href="/login" class="text-gray-700 hover:text-brand font-medium">Login</a>
+        <a href="/signup" class="text-gray-700 hover:text-brand font-medium">Signup</a>
+        <a href="/profile" class="text-gray-700 hover:text-brand font-medium">Profile</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-grow flex items-center justify-center">
+    <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md border border-indigo-100">
+
+      <!-- Avatar -->
+      <div class="flex justify-center mb-4">
+        <div id="avatar" class="w-16 h-16 rounded-full bg-indigo-500 text-white flex items-center justify-center text-2xl font-bold shadow-md">
+          <!-- Initials go here -->
+        </div>
+      </div>
+
+      <h1 class="text-3xl font-bold text-brand mb-2 text-center">Welcome!</h1>
+      <p class="text-gray-600 mb-6 text-center">This is your profile page.</p>
+
+      <!-- Profile Form -->
+      <form id="profile-form" method="POST" action="/update_profile" class="space-y-6">
+        <div>
+          <label class="text-sm text-gray-500">Full Name</label>
+          <input name="name" value="{{name}}" class="mt-1 w-full p-2 border rounded" required />
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">Email Address</label>
+          <input type="email" value="{{email}}" class="mt-1 w-full p-2 border rounded bg-gray-100" readonly />
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">College</label>
+          <input name="college" value="{{college}}" class="mt-1 w-full p-2 border rounded" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">Standard / Grade</label>
+          <input name="standard" value="{{standard}}" class="mt-1 w-full p-2 border rounded" />
+        </div>
+        <div>
+          <label class="text-sm text-gray-500">Phone Number</label>
+          <input name="phone" value="{{phone}}" class="mt-1 w-full p-2 border rounded" />
+        </div>
+
+        <div class="text-center">
+          <button type="submit" class="bg-brand text-white px-4 py-2 rounded hover:bg-indigo-700">
+            Save Changes
+          </button>
+        </div>
+      </form>
+
+      <div id="success-msg" class="text-green-600 mt-4 hidden text-center font-medium">
+        ✅ Profile updated successfully!
+      </div>
+
+      <div class="mt-10 flex justify-between text-sm">
+        <a href="/" class="text-brand underline">← Back to Home</a>
+        <a href="/logout" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Logout</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- JS for avatar initials and showing success message -->
+  <script>
+    // Avatar initials
+    const fullName = "{{name}}";
+    const nameParts = fullName.trim().split(" ");
+    let initials = "";
+    if (nameParts.length >= 2) {
+      initials = nameParts[0][0] + nameParts[1][0];
+    } else if (nameParts.length === 1) {
+      initials = nameParts[0][0];
+    }
+    document.getElementById("avatar").innerText = initials.toUpperCase();
+
+    // Show success message if ?updated=1 in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("updated") === "1") {
+      document.getElementById("success-msg").classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>

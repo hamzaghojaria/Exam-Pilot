@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login | Exam-Pilot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#4f46e5', // Indigo-600
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-indigo-50 min-h-screen flex flex-col">
+
+  <!-- Shared Header -->
+  <nav class="bg-white shadow-md mb-6">
+    <div class="max-w-3xl mx-auto flex justify-between items-center p-4">
+      <a href="/" class="text-xl font-bold text-brand">✈️ Exam-Pilot</a>
+      <div class="space-x-4">
+        <a href="/login" class="text-gray-700 hover:text-brand font-medium">Login</a>
+        <a href="/signup" class="text-gray-700 hover:text-brand font-medium">Signup</a>
+        <a href="/profile" class="text-gray-700 hover:text-brand font-medium">Profile</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="flex-grow flex items-center justify-center">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-indigo-200">
+      <h2 class="text-3xl font-bold text-center text-brand mb-6">🔐 Welcome Back</h2>
+
+      <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700">Email <span class="text-red-500">*</span></label>
+          <input name="email" type="email" class="w-full p-2 mt-1 border border-gray-300 rounded" required />
+        </div>
+
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700">Password <span class="text-red-500">*</span></label>
+          <input name="password" type="password" class="w-full p-2 mt-1 border border-gray-300 rounded" required />
+        </div>
+
+        <div id="message" class="text-sm text-center font-medium"></div>
+
+        <button type="submit" class="w-full bg-brand text-white p-2 rounded hover:bg-indigo-700 transition duration-200">
+          Login
+        </button>
+      </form>
+
+      <p class="mt-4 text-sm text-center">
+        Don’t have an account?
+        <a href="/signup" class="text-brand underline font-medium">Signup</a>
+      </p>
+    </div>
+  </main>
+
+  <!-- Modal for success -->
+  <div id="success-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 hidden">
+    <div class="bg-white p-6 rounded-lg shadow-lg text-center max-w-xs w-full animate-bounce">
+      <h3 class="text-lg font-semibold text-green-600 mb-2">🎉 Login Successful!</h3>
+      <p class="text-sm text-gray-600">Lets prepare you for your exams....</p> 
+    </div>
+  </div>
+
+  <script>
+    async function handleLogin(event) {
+      event.preventDefault();
+      const form = event.target;
+      const formData = new FormData(form);
+
+      const res = await fetch("/login", {
+        method: "POST",
+        body: formData,
+      });
+
+      const messageEl = document.getElementById("message");
+      messageEl.classList.remove("text-red-600", "text-green-600");
+
+      if (res.redirected) {
+        document.getElementById("success-modal").classList.remove("hidden");
+        setTimeout(() => {
+          window.location.href = res.url;
+        }, 1500);
+      } else {
+        const data = await res.json();
+        messageEl.textContent = "❌ " + (data.detail || "Login failed.");
+        messageEl.classList.add("text-red-600");
+      }
+    }
+  </script>
+</body>
+</html>

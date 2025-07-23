@@ -27,3 +27,13 @@ input[type="radio"]:checked+label {
 #result-section {
     margin-top: 2rem;
 }
+
+
+.fade-in {
+  animation: fadeIn 0.8s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
